@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://crates.io/crates/warren-cli"><img src="https://img.shields.io/crates/v/warren-cli.svg" alt="Crates.io"></a>
   <a href="https://docs.rs/warren-cli"><img src="https://img.shields.io/docsrs/warren-cli" alt="Docs"></a>
-  <a href="https://github.com/swadhinbiswas/warren/blob/main/LICENSE"><img src="https://img.shields.io/crates/l/warren-cli.svg" alt="License"></a>
+  <a href="https://github.com/swadhinbiswas/warren/blob/main/LICENSE"><img src="https://img.shields.io/github/license/swadhinbiswas/warren.svg" alt="License"></a>
 </p>
 
 ---
