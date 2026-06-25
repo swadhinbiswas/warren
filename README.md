@@ -1,4 +1,8 @@
-<h1 align="center">Warren 🐇</h1>
+<h1 align="center">Warren</h1>
+
+<p align="center">
+  <img src="assets/logo.png" alt="Warren Mascot" width="300">
+</p>
 
 <p align="center">
   <strong>Install any CLI tool unlimited times. Every instance is its own world.</strong>
