@@ -1,6 +1,6 @@
 [package]
 name    = "warren"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Install any CLI tool unlimited times. Every instance is its own world."
 license = "MIT"
