@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  <a href="https://crates.io/crates/warren"><img src="https://img.shields.io/crates/v/warren.svg" alt="Crates.io"></a>
-  <a href="https://docs.rs/warren"><img src="https://img.shields.io/docsrs/warren" alt="Docs"></a>
-  <a href="https://github.com/swadhinbiswas/warren/blob/main/LICENSE"><img src="https://img.shields.io/crates/l/warren.svg" alt="License"></a>
+  <a href="https://crates.io/crates/warren-cli"><img src="https://img.shields.io/crates/v/warren-cli.svg" alt="Crates.io"></a>
+  <a href="https://docs.rs/warren-cli"><img src="https://img.shields.io/docsrs/warren-cli" alt="Docs"></a>
+  <a href="https://github.com/swadhinbiswas/warren/blob/main/LICENSE"><img src="https://img.shields.io/crates/l/warren-cli.svg" alt="License"></a>
 </p>
 
 ---
@@ -61,7 +61,7 @@ curl -fsSL https://raw.githubusercontent.com/swadhinbiswas/warren/main/install.s
 If you already have Rust installed, you can build and install Warren directly from crates.io:
 
 ```bash
-cargo install warren
+cargo install warren-cli
 warren shell install  # Sets up your PATH
 ```
 

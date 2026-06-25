@@ -37,10 +37,10 @@ if command -v cargo &> /dev/null; then
     echo -e "  ${CYAN}ℹ${NC}  Cargo detected. Installing Warren from source..."
     
     # If we are in the source directory, install from path, otherwise from crates.io
-    if [ -f "Cargo.toml" ] && grep -q 'name = "warren"' Cargo.toml; then
+    if [ -f "Cargo.toml" ] && grep -q 'name = "warren-cli"' Cargo.toml; then
         cargo install --path . --quiet
     else
-        cargo install warren --quiet
+        cargo install warren-cli --quiet
     fi
     
     echo -e "  ${GREEN}✓${NC}  Warren binary built and installed."
