@@ -5,9 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.6] - 2026-09-05
 
 ### Added
+- Workspace sessions: `warren session save` snapshots running apps,
+  terminals and workdirs; `warren session restore` reopens everything
+  with one command (`--dry-run` to preview). `ls` / `rm` / `prune`
+  manage snapshots; saves auto-delete beyond retention (`--keep`,
+  default 5, or `sessions.keep` in config) so snapshots never bloat disk.
 - App wrapping: `warren dig` now installs the same graphical app many
   times with separate accounts — `flatpak:<id>` (or a bare Flathub id
   like `com.discordapp.Discord`), `snap:<name>`, `apt:`/`dnf:`/
@@ -49,9 +54,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prefers `~/.bashrc` over `~/.bash_profile`.
 - Config files with a partial `[paths]` table no longer fail to parse.
 - Removed dead code; `cargo build` and `cargo clippy` are clean.
-
-## [0.1.6] - 2026-06-26
-
-### Added
-- Initial public release. Support for `dig`, `run`, `ls`, `inspect`, `rm`,
-  `update`, `clone`, `export`, `import`, `env`, and `shell` commands.
+- CI now runs fmt, clippy (`-D warnings`) and tests on every PR; releases
+  build natively per architecture (x86_64 + aarch64), smoke-test the
+  binary, and publish to crates.io from a clean tree.
