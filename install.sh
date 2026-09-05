@@ -8,7 +8,6 @@ set -euo pipefail
 
 REPO="swadhinbiswas/warren"
 REPO_URL="https://github.com/${REPO}"
-RAW_URL="https://raw.githubusercontent.com/${REPO}"
 DEFAULT_REF="main"
 
 SOURCE_REF="${WARREN_REF:-$DEFAULT_REF}"
@@ -119,6 +118,13 @@ install_prebuilt() {
         mv "$tmp/warren" "$BIN_DIR/warren"
         chmod +x "$BIN_DIR/warren"
         rm -rf "$tmp"
+        # Never install a binary that cannot run (wrong arch, truncated
+        # download): fall back to a source build instead.
+        if ! "$BIN_DIR/warren" --version >/dev/null 2>&1; then
+            rm -f "$BIN_DIR/warren"
+            err "Pre-built binary failed its smoke test; building from source instead."
+            return 1
+        fi
         return 0
     fi
     warn "No pre-built release for ${triple} yet; building from source instead."
