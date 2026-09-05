@@ -86,11 +86,13 @@ The installer is smart about how it gets the binary:
 3. Either way it finishes by configuring your shell (`bash`, `zsh`, `fish`,
    or `nushell`) so `warren` is on your `$PATH`.
 
-For more control, download the script first and pass options:
+For more control, download the script first and pass options.
+Note: downloading only saves the file — run it afterwards to install:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/swadhinbiswas/warren/main/install.sh -o install.sh
-bash install.sh --from-source        # always build from source
+bash install.sh                # install (this step does the work)
+bash install.sh --from-source  # always build from source
 WARREN_REF=v0.1.6 bash install.sh    # install a specific release/tag
 ```
 
