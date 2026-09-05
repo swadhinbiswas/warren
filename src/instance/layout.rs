@@ -1,5 +1,5 @@
+use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
-use anyhow::{Context, Result, bail};
 
 #[derive(Debug, Clone)]
 pub struct InstanceLayout {
@@ -10,29 +10,64 @@ pub struct InstanceLayout {
 impl InstanceLayout {
     pub fn new(instances_dir: &Path, alias: &str) -> Self {
         let root = instances_dir.join(alias);
-        Self { root, alias: alias.to_string() }
+        Self {
+            root,
+            alias: alias.to_string(),
+        }
     }
 
-    pub fn bin_dir(&self) -> PathBuf { self.root.join("bin") }
-    pub fn home_dir(&self) -> PathBuf { self.root.join("home") }
-    pub fn config_dir(&self) -> PathBuf { self.root.join("config") }
-    pub fn cache_dir(&self) -> PathBuf { self.root.join("cache") }
-    pub fn data_dir(&self) -> PathBuf { self.root.join("data") }
-    pub fn state_dir(&self) -> PathBuf { self.root.join("state") }
-    pub fn runtime_dir(&self) -> PathBuf { self.root.join("runtime") }
-    pub fn tmp_dir(&self) -> PathBuf { self.root.join("tmp") }
-    pub fn logs_dir(&self) -> PathBuf { self.root.join("logs") }
-    pub fn installers_dir(&self) -> PathBuf { self.root.join("installers") }
-    pub fn metadata_path(&self) -> PathBuf { self.root.join("metadata.toml") }
-    pub fn launcher_path(&self) -> PathBuf { self.root.join("launcher") }
+    pub fn bin_dir(&self) -> PathBuf {
+        self.root.join("bin")
+    }
+    pub fn home_dir(&self) -> PathBuf {
+        self.root.join("home")
+    }
+    pub fn config_dir(&self) -> PathBuf {
+        self.root.join("config")
+    }
+    pub fn cache_dir(&self) -> PathBuf {
+        self.root.join("cache")
+    }
+    pub fn data_dir(&self) -> PathBuf {
+        self.root.join("data")
+    }
+    pub fn state_dir(&self) -> PathBuf {
+        self.root.join("state")
+    }
+    pub fn runtime_dir(&self) -> PathBuf {
+        self.root.join("runtime")
+    }
+    pub fn tmp_dir(&self) -> PathBuf {
+        self.root.join("tmp")
+    }
+    pub fn logs_dir(&self) -> PathBuf {
+        self.root.join("logs")
+    }
+    pub fn installers_dir(&self) -> PathBuf {
+        self.root.join("installers")
+    }
+    pub fn metadata_path(&self) -> PathBuf {
+        self.root.join("metadata.toml")
+    }
+    pub fn launcher_path(&self) -> PathBuf {
+        self.root.join("launcher")
+    }
 
-    pub fn exists(&self) -> bool { self.root.exists() }
+    pub fn exists(&self) -> bool {
+        self.root.exists()
+    }
 
     pub fn create(&self) -> Result<()> {
         let dirs = [
-            self.bin_dir(), self.home_dir(), self.config_dir(),
-            self.cache_dir(), self.data_dir(), self.state_dir(),
-            self.runtime_dir(), self.tmp_dir(), self.logs_dir(),
+            self.bin_dir(),
+            self.home_dir(),
+            self.config_dir(),
+            self.cache_dir(),
+            self.data_dir(),
+            self.state_dir(),
+            self.runtime_dir(),
+            self.tmp_dir(),
+            self.logs_dir(),
             self.installers_dir(),
         ];
         for dir in &dirs {
@@ -45,19 +80,12 @@ impl InstanceLayout {
 
     pub fn destroy(&self) -> Result<()> {
         if self.root.exists() {
-            std::fs::remove_dir_all(&self.root)
-                .with_context(|| format!("failed to remove instance directory {}", self.root.display()))?;
-        }
-        Ok(())
-    }
-
-    pub fn validate_path_containment(&self, path: &Path) -> Result<()> {
-        let canonical_root = self.root.canonicalize()
-            .with_context(|| format!("failed to canonicalize root {}", self.root.display()))?;
-        let canonical_path = path.canonicalize()
-            .with_context(|| format!("failed to canonicalize path {}", path.display()))?;
-        if !canonical_path.starts_with(&canonical_root) {
-            bail!("path {} is outside instance root {}", canonical_path.display(), canonical_root.display());
+            std::fs::remove_dir_all(&self.root).with_context(|| {
+                format!(
+                    "failed to remove instance directory {}",
+                    self.root.display()
+                )
+            })?;
         }
         Ok(())
     }
@@ -90,12 +118,21 @@ pub struct DiskUsage {
 
 impl DiskUsage {
     pub fn total(&self) -> u64 {
-        self.bin + self.config + self.cache + self.data + self.state + self.home + self.tmp + self.logs
+        self.bin
+            + self.config
+            + self.cache
+            + self.data
+            + self.state
+            + self.home
+            + self.tmp
+            + self.logs
     }
 }
 
 fn dir_size(path: &Path) -> u64 {
-    if !path.exists() { return 0; }
+    if !path.exists() {
+        return 0;
+    }
     walkdir::WalkDir::new(path)
         .into_iter()
         .filter_map(|e| e.ok())

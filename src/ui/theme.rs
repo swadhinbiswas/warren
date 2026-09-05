@@ -26,11 +26,6 @@ impl Theme {
             value: Style::new().white().bold(),
         }
     }
-
-    pub fn prefix(&self) -> String {
-        format!("  {}  ", self.brand.apply_to("warren"))
-    }
-
     pub fn success(&self, msg: &str) {
         eprintln!("  {}  {}", self.success.apply_to("✓"), msg);
     }
@@ -48,11 +43,23 @@ impl Theme {
     }
 
     pub fn header(&self, msg: &str) {
-        eprintln!("\n  {}  {}\n", self.brand.apply_to("warren"), self.bold.apply_to(msg));
+        eprintln!(
+            "\n  {}  {}\n",
+            self.brand.apply_to("warren"),
+            self.bold.apply_to(msg)
+        );
+    }
+
+    pub fn section(&self, msg: &str) {
+        eprintln!("  {}", self.brand.apply_to(msg));
     }
 
     pub fn kv(&self, key: &str, value: &str) {
-        eprintln!("  {:<12}{}", self.label.apply_to(key), self.value.apply_to(value));
+        eprintln!(
+            "  {:<12}{}",
+            self.label.apply_to(key),
+            self.value.apply_to(value)
+        );
     }
 
     pub fn dim(&self, msg: &str) {

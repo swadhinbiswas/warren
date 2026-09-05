@@ -1,12 +1,12 @@
+pub mod launcher;
 pub mod layout;
 pub mod metadata;
-pub mod launcher;
 
+pub use launcher::Launcher;
 pub use layout::InstanceLayout;
 pub use metadata::InstanceMetadata;
-pub use launcher::Launcher;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use regex::Regex;
 
 /// Validate an instance alias.

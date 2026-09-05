@@ -1,7 +1,7 @@
-use std::path::Path;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstanceMetadata {
@@ -18,6 +18,12 @@ pub struct InstanceInfo {
     pub shell: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// Graphical app: gets a `.desktop` entry and detached `warren run`.
+    #[serde(default)]
+    pub gui: bool,
+    /// Icon name/path for the `.desktop` entry (wrapped apps only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,6 +31,10 @@ pub struct InstallInfo {
     pub source: String,
     pub source_type: SourceType,
     pub installer_hash: Option<String>,
+    /// Host command for wrapped apps (flatpak / system / desktop).
+    /// Empty for script installs and legacy instances.
+    #[serde(default)]
+    pub launch_command: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,6 +43,11 @@ pub enum SourceType {
     RemoteScript,
     LocalScript,
     Package,
+    Flatpak,
+    Snap,
+    System,
+    App,
+    Desktop,
 }
 
 impl std::fmt::Display for SourceType {
@@ -41,6 +56,11 @@ impl std::fmt::Display for SourceType {
             SourceType::RemoteScript => write!(f, "remote_script"),
             SourceType::LocalScript => write!(f, "local_script"),
             SourceType::Package => write!(f, "package"),
+            SourceType::Flatpak => write!(f, "flatpak"),
+            SourceType::Snap => write!(f, "snap"),
+            SourceType::System => write!(f, "system"),
+            SourceType::App => write!(f, "app"),
+            SourceType::Desktop => write!(f, "desktop"),
         }
     }
 }
@@ -50,6 +70,9 @@ pub struct PathsInfo {
     pub root: String,
     pub bin: String,
     pub launcher: String,
+    /// Absolute path of the `warren-<alias>.desktop` entry, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub desktop_file: Option<String>,
 }
 
 impl InstanceMetadata {

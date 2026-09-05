@@ -1,6 +1,6 @@
-use std::path::Path;
-use std::os::unix::fs::PermissionsExt;
 use anyhow::{Context, Result, bail};
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 
 use crate::instance::InstanceLayout;
 
@@ -9,11 +9,16 @@ pub struct InstallerExecutor;
 impl InstallerExecutor {
     pub async fn execute(script_path: &Path, layout: &InstanceLayout) -> Result<()> {
         let perms = std::fs::Permissions::from_mode(0o755);
-        std::fs::set_permissions(script_path, perms)
-            .with_context(|| format!("failed to make installer executable: {}", script_path.display()))?;
+        std::fs::set_permissions(script_path, perms).with_context(|| {
+            format!(
+                "failed to make installer executable: {}",
+                script_path.display()
+            )
+        })?;
         tracing::info!(script = %script_path.display(), instance = %layout.alias, "executing installer");
         let output = tokio::process::Command::new("bash")
             .arg(script_path)
+            .current_dir(&layout.root)
             .env("HOME", layout.home_dir())
             .env("XDG_CONFIG_HOME", layout.config_dir())
             .env("XDG_CACHE_HOME", layout.cache_dir())

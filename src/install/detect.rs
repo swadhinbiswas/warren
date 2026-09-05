@@ -1,35 +1,62 @@
-use std::path::Path;
 use anyhow::Result;
+use std::path::Path;
+
+use crate::instance::InstanceLayout;
 
 pub fn detect_binary(bin_dir: &Path) -> Result<Option<String>> {
-    if !bin_dir.exists() { return Ok(None); }
+    if !bin_dir.exists() {
+        return Ok(None);
+    }
     let mut binaries: Vec<String> = Vec::new();
     for entry in std::fs::read_dir(bin_dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_file() && is_executable(&path) {
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                binaries.push(name.to_string());
-            }
+        if path.is_file()
+            && is_executable(&path)
+            && let Some(name) = path.file_name().and_then(|n| n.to_str())
+        {
+            binaries.push(name.to_string());
         }
     }
     tracing::debug!(binaries = ?binaries, "detected binaries");
-    if binaries.is_empty() { return Ok(None); }
-    if binaries.len() == 1 { return Ok(Some(binaries.into_iter().next().unwrap())); }
+    if binaries.is_empty() {
+        return Ok(None);
+    }
+    if binaries.len() == 1 {
+        return Ok(Some(binaries.into_iter().next().unwrap()));
+    }
     binaries.sort_by_key(|b| b.len());
     Ok(Some(binaries.into_iter().next().unwrap()))
 }
 
-pub fn detect_version(bin_dir: &Path, binary_name: &str) -> Option<String> {
-    let binary_path = bin_dir.join(binary_name);
-    if !binary_path.exists() { return None; }
+pub fn detect_version(layout: &InstanceLayout, binary_name: &str) -> Option<String> {
+    let binary_path = layout.bin_dir().join(binary_name);
+    if !binary_path.exists() {
+        return None;
+    }
     for flag in &["--version", "-v", "-V", "version"] {
-        if let Ok(output) = std::process::Command::new(&binary_path).arg(flag).output() {
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                if let Some(version) = extract_version_string(&stdout) { return Some(version); }
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                if let Some(version) = extract_version_string(&stderr) { return Some(version); }
+        let output = std::process::Command::new(&binary_path)
+            .arg(flag)
+            .env("HOME", layout.home_dir())
+            .env("XDG_CONFIG_HOME", layout.config_dir())
+            .env("XDG_CACHE_HOME", layout.cache_dir())
+            .env("XDG_DATA_HOME", layout.data_dir())
+            .env("XDG_STATE_HOME", layout.state_dir())
+            .env("XDG_RUNTIME_DIR", layout.runtime_dir())
+            .env("TMPDIR", layout.tmp_dir())
+            .env("WARREN_INSTANCE", &layout.alias)
+            .env("WARREN_INSTANCE_DIR", &layout.root)
+            .output();
+        if let Ok(output) = output
+            && output.status.success()
+        {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Some(version) = extract_version_string(&stdout) {
+                return Some(version);
+            }
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if let Some(version) = extract_version_string(&stderr) {
+                return Some(version);
             }
         }
     }
