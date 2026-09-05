@@ -1,5 +1,5 @@
-use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
+use std::path::{Path, PathBuf};
 
 use super::detect::ShellType;
 
@@ -13,6 +13,10 @@ pub fn install_shell_integration(shell: &ShellType, bin_dir: &Path) -> Result<()
             tracing::info!(file = %rc_file.display(), "shell integration already installed");
             return Ok(());
         }
+    }
+    if let Some(parent) = rc_file.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create directory {}", parent.display()))?;
     }
     let mut file = std::fs::OpenOptions::new()
         .create(true)
@@ -31,7 +35,17 @@ fn get_rc_file(shell: &ShellType) -> Result<PathBuf> {
     match shell {
         ShellType::Bash => {
             let bashrc = home.join(".bashrc");
-            if bashrc.exists() { Ok(bashrc) } else { Ok(home.join(".bash_profile")) }
+            let profile = home.join(".bash_profile");
+            // Prefer ~/.bashrc (interactive shells); fall back to
+            // ~/.bash_profile only if it exists. Create ~/.bashrc when
+            // neither exists, since .bash_profile only runs for login shells.
+            if bashrc.exists() {
+                Ok(bashrc)
+            } else if profile.exists() {
+                Ok(profile)
+            } else {
+                Ok(bashrc)
+            }
         }
         ShellType::Zsh => Ok(home.join(".zshrc")),
         ShellType::Fish => Ok(home.join(".config").join("fish").join("config.fish")),

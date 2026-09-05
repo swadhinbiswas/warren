@@ -15,12 +15,14 @@ pub async fn execute(config: &WarrenConfig, theme: &Theme) -> Result<()> {
     let mut entries: Vec<InstanceMetadata> = Vec::new();
     for entry in std::fs::read_dir(instances_dir)? {
         let entry = entry?;
-        if !entry.path().is_dir() { continue; }
+        if !entry.path().is_dir() {
+            continue;
+        }
         let metadata_path = entry.path().join("metadata.toml");
-        if metadata_path.exists() {
-            if let Ok(meta) = InstanceMetadata::load(&metadata_path) {
-                entries.push(meta);
-            }
+        if metadata_path.exists()
+            && let Ok(meta) = InstanceMetadata::load(&metadata_path)
+        {
+            entries.push(meta);
         }
     }
     if entries.is_empty() {
@@ -30,24 +32,31 @@ pub async fn execute(config: &WarrenConfig, theme: &Theme) -> Result<()> {
     }
     entries.sort_by(|a, b| a.instance.alias.cmp(&b.instance.alias));
     theme.blank();
-    eprintln!("  {:<20}{:<14}{:<12}{}",
-        console::style("ALIAS").bold().dim(),
-        console::style("APP").bold().dim(),
-        console::style("VERSION").bold().dim(),
-        console::style("CREATED").bold().dim(),
+    let header = console::Style::new().bold().dim();
+    eprintln!(
+        "  {:<20}{:<14}{:<12}{:<8}{}",
+        header.apply_to("ALIAS"),
+        header.apply_to("APP"),
+        header.apply_to("VERSION"),
+        header.apply_to("KIND"),
+        header.apply_to("CREATED"),
     );
     for meta in &entries {
         let age = format_relative_time(&meta.instance.created_at);
         let version = meta.instance.version.as_deref().unwrap_or("-");
-        eprintln!("  {:<20}{:<14}{:<12}{}",
-            console::style(&meta.instance.alias).cyan(),
-            meta.instance.app_name,
+        let kind = if meta.instance.gui { "gui" } else { "cli" };
+        eprintln!(
+            "  {:<20}{:<14}{:<12}{:<8}{}",
+            theme.brand.apply_to(&meta.instance.alias),
+            theme.value.apply_to(&meta.instance.app_name),
             version,
-            console::style(&age).dim(),
+            kind,
+            theme.dim.apply_to(&age),
         );
     }
     theme.blank();
-    theme.dim(&format!("{} instance{}  •  {}",
+    theme.dim(&format!(
+        "{} instance{}  •  {}",
         entries.len(),
         if entries.len() == 1 { "" } else { "s" },
         InstanceMetadata::display_path(&instances_dir.to_string_lossy()),
@@ -60,17 +69,29 @@ fn format_relative_time(dt: &chrono::DateTime<Utc>) -> String {
     let now = Utc::now();
     let diff = now.signed_duration_since(dt);
     let seconds = diff.num_seconds();
-    if seconds < 60 { return "just now".to_string(); }
+    if seconds < 60 {
+        return "just now".to_string();
+    }
     let minutes = diff.num_minutes();
-    if minutes < 60 { return format!("{} min{} ago", minutes, if minutes == 1 { "" } else { "s" }); }
+    if minutes < 60 {
+        return format!("{} min{} ago", minutes, if minutes == 1 { "" } else { "s" });
+    }
     let hours = diff.num_hours();
-    if hours < 24 { return format!("{} hour{} ago", hours, if hours == 1 { "" } else { "s" }); }
+    if hours < 24 {
+        return format!("{} hour{} ago", hours, if hours == 1 { "" } else { "s" });
+    }
     let days = diff.num_days();
-    if days < 7 { return format!("{} day{} ago", days, if days == 1 { "" } else { "s" }); }
+    if days < 7 {
+        return format!("{} day{} ago", days, if days == 1 { "" } else { "s" });
+    }
     let weeks = days / 7;
-    if weeks < 5 { return format!("{} week{} ago", weeks, if weeks == 1 { "" } else { "s" }); }
+    if weeks < 5 {
+        return format!("{} week{} ago", weeks, if weeks == 1 { "" } else { "s" });
+    }
     let months = days / 30;
-    if months < 12 { return format!("{} month{} ago", months, if months == 1 { "" } else { "s" }); }
+    if months < 12 {
+        return format!("{} month{} ago", months, if months == 1 { "" } else { "s" });
+    }
     let years = days / 365;
     format!("{} year{} ago", years, if years == 1 { "" } else { "s" })
 }

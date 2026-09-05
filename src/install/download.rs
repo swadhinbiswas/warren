@@ -1,73 +1,81 @@
-use std::path::Path;
 use anyhow::{Context, Result, bail};
-use sha2::{Sha256, Digest};
+use futures_util::StreamExt;
+use sha2::{Digest, Sha256};
+use std::path::Path;
+use std::time::Duration;
+use tokio::io::AsyncWriteExt;
 
-pub fn parse_source(source: &str) -> SourceInfo {
-    let trimmed = source.trim();
-    if trimmed.contains('|') {
-        if let Some(url) = extract_url_from_pipe(trimmed) {
-            return SourceInfo::RemoteScript { url, original: trimmed.to_string() };
-        }
-    }
-    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
-        return SourceInfo::RemoteScript { url: trimmed.to_string(), original: trimmed.to_string() };
-    }
-    if trimmed.starts_with("./") || trimmed.starts_with('/') || trimmed.ends_with(".sh") {
-        return SourceInfo::LocalScript { path: trimmed.to_string() };
-    }
-    SourceInfo::Package { name: trimmed.to_string() }
-}
+use crate::ui::progress;
 
-#[derive(Debug, Clone)]
-pub enum SourceInfo {
-    RemoteScript { url: String, original: String },
-    LocalScript { path: String },
-    Package { name: String },
-}
+// Source parsing lives in `crate::app::sources` (extended with flatpak /
+// snap / system / app / desktop wrap sources). Re-exported here so
+// existing `install::download::{parse_source, SourceInfo}` call sites keep
+// working unchanged.
+pub use crate::app::sources::{SourceInfo, parse_source};
 
-fn extract_url_from_pipe(cmd: &str) -> Option<String> {
-    let parts: Vec<&str> = cmd.split('|').collect();
-    let fetch_cmd = parts.first()?.trim();
-    let tokens: Vec<&str> = fetch_cmd.split_whitespace().collect();
-    for (i, token) in tokens.iter().enumerate() {
-        if token.starts_with("http://") || token.starts_with("https://") {
-            return Some(token.to_string());
-        }
-        if *token == "-fsSL" || *token == "-sSL" || *token == "-fsL" || *token == "-sL" || *token == "-L" {
-            if let Some(next) = tokens.get(i + 1) {
-                if next.starts_with("http://") || next.starts_with("https://") {
-                    return Some(next.to_string());
-                }
-            }
-        }
-    }
-    for token in &tokens {
-        if token.starts_with("http://") || token.starts_with("https://") {
-            return Some(token.to_string());
-        }
-    }
-    None
-}
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+const RESPONSE_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub async fn download_installer(url: &str, dest: &Path) -> Result<String> {
     tracing::info!(url = %url, dest = %dest.display(), "downloading installer");
-    let response = reqwest::get(url).await
+    let client = reqwest::Client::builder()
+        .connect_timeout(CONNECT_TIMEOUT)
+        .timeout(RESPONSE_TIMEOUT)
+        .user_agent(concat!("warren/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .context("failed to build HTTP client")?;
+    let response = client
+        .get(url)
+        .send()
+        .await
         .with_context(|| format!("failed to fetch installer from {}", url))?;
     if !response.status().is_success() {
-        bail!("failed to download installer: HTTP {} from {}", response.status(), url);
+        bail!(
+            "failed to download installer: HTTP {} from {}",
+            response.status(),
+            url
+        );
     }
-    let bytes = response.bytes().await
-        .with_context(|| format!("failed to read response body from {}", url))?;
-    let mut hasher = Sha256::new();
-    hasher.update(&bytes);
-    let hash = format!("sha256:{}", hex::encode(hasher.finalize()));
+
+    let total = response.content_length().unwrap_or(0);
+    let bar = if total > 0 {
+        Some(progress::download_bar(total))
+    } else {
+        None
+    };
+    let bar_ref = bar.as_ref();
+
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("failed to create directory {}", parent.display()))?;
     }
-    std::fs::write(dest, &bytes)
-        .with_context(|| format!("failed to write installer to {}", dest.display()))?;
-    tracing::debug!(hash = %hash, bytes = bytes.len(), "download complete");
+    let mut file = tokio::fs::File::create(dest)
+        .await
+        .with_context(|| format!("failed to create installer file {}", dest.display()))?;
+
+    let mut hasher = Sha256::new();
+    let mut stream = response.bytes_stream();
+    let mut written: u64 = 0;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.with_context(|| format!("failed to read response body from {}", url))?;
+        hasher.update(&chunk);
+        file.write_all(&chunk)
+            .await
+            .with_context(|| format!("failed to write installer to {}", dest.display()))?;
+        written += chunk.len() as u64;
+        if let Some(bar) = bar_ref {
+            bar.set_position(written);
+        }
+    }
+    file.flush()
+        .await
+        .with_context(|| format!("failed to flush installer file {}", dest.display()))?;
+    if let Some(bar) = bar_ref {
+        bar.finish_with_message("Downloaded");
+    }
+
+    let hash = format!("sha256:{}", hex::encode(hasher.finalize()));
+    tracing::debug!(hash = %hash, bytes = written, "download complete");
     Ok(hash)
 }
 

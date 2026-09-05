@@ -1855,8 +1855,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "warren"
-version = "0.1.0"
+name = "warren-cli"
+version = "0.1.6"
 dependencies = [
  "anyhow",
  "chrono",

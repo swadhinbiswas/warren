@@ -8,7 +8,7 @@ use std::path::PathBuf;
     version,
     about = "Install any CLI tool unlimited times. Every instance is its own world.",
     long_about = "warren is a rootless CLI runtime that lets you install and run unlimited\nisolated instances of any CLI application — each with its own identity,\nconfiguration, and data.",
-    after_help = "Examples:\n  warren dig \"curl -fsSL https://example.com/install | bash\" --as myapp\n  warren ls\n  warren run myapp -- --help\n  warren inspect myapp"
+    after_help = "Examples:\n  warren dig \"curl -fsSL https://example.com/install | bash\" --as myapp\n  warren dig flatpak:com.discordapp.Discord --as discord-work\n  warren dig app:discord --as discord-home\n  warren ls\n  warren run myapp -- --help\n  warren inspect myapp\n  warren session save\n  warren session restore"
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -19,7 +19,9 @@ pub struct Cli {
 pub enum Command {
     /// Install a new instance from a source
     Dig {
-        /// Install source: URL piped to shell, local script, or package name
+        /// Install source: URL piped to shell, local script, package name,
+        /// or app source (flatpak:<id>, snap:<name>, apt:<pkg>, app:<name>,
+        /// desktop:<id>, or a bare Flathub id like com.discordapp.Discord)
         source: String,
         /// Alias for this instance
         #[arg(long = "as", value_name = "ALIAS")]
@@ -27,6 +29,12 @@ pub enum Command {
         /// Skip confirmation prompts
         #[arg(long, short)]
         yes: bool,
+        /// Treat as a graphical app (`.desktop` entry + detached run)
+        #[arg(long, conflicts_with = "no_gui")]
+        gui: bool,
+        /// Treat as a CLI app even if it looks graphical
+        #[arg(long, conflicts_with = "gui")]
+        no_gui: bool,
     },
     /// Run an installed instance
     Run {
@@ -84,6 +92,11 @@ pub enum Command {
     },
     /// Show warren environment information
     Env,
+    /// Save and restore your desktop workspace session
+    Session {
+        #[command(subcommand)]
+        action: SessionAction,
+    },
     /// Manage shell integration
     Shell {
         #[command(subcommand)]
@@ -97,4 +110,42 @@ pub enum ShellAction {
     Install,
     /// Show current shell detection info
     Info,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum SessionAction {
+    /// Save the current desktop session (apps, terminals, workdirs)
+    Save {
+        /// Snapshot name (default: session-YYYYMMDD-HHMMSS)
+        #[arg(long)]
+        name: Option<String>,
+        /// How many snapshots to keep; older ones are deleted
+        #[arg(long)]
+        keep: Option<usize>,
+    },
+    /// Restore a saved session with one command (default: latest)
+    Restore {
+        /// Snapshot name to restore (default: latest saved session)
+        #[arg(long)]
+        name: Option<String>,
+        /// Print the relaunch plan without starting anything
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// List saved sessions
+    Ls,
+    /// Delete a saved session
+    Rm {
+        /// Session name to delete
+        name: String,
+        /// Skip confirmation prompt
+        #[arg(long, short)]
+        yes: bool,
+    },
+    /// Delete old snapshots, keeping only the newest ones
+    Prune {
+        /// How many newest snapshots to keep
+        #[arg(long)]
+        keep: Option<usize>,
+    },
 }

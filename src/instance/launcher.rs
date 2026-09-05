@@ -1,14 +1,48 @@
-use std::path::{Path, PathBuf};
-use std::os::unix::fs::PermissionsExt;
 use anyhow::{Context, Result};
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
 
 use super::layout::InstanceLayout;
+use crate::app::LaunchSpec;
 
 pub struct Launcher;
 
 impl Launcher {
-    pub fn generate(alias: &str, layout: &InstanceLayout, binary_name: &str) -> String {
-        let instance_dir = layout.root.to_string_lossy();
+    /// File mode with explicit GUI handling (keeps host `$XDG_RUNTIME_DIR`
+    /// so Wayland/DBus keep working for graphical instance binaries).
+    pub fn generate_file(
+        alias: &str,
+        layout: &InstanceLayout,
+        binary_name: &str,
+        gui: bool,
+    ) -> String {
+        let target = format!("${{WARREN_INSTANCE_DIR}}/bin/{}", shell_quote(binary_name));
+        Self::render(alias, layout, &target, gui)
+    }
+
+    /// Wrap mode: run a host command (`flatpak run …`, `/usr/bin/…`)
+    /// inside the sandbox. Zero-copy — the host app is never reinstalled.
+    pub fn generate_wrapped(alias: &str, layout: &InstanceLayout, spec: &LaunchSpec) -> String {
+        let quoted: Vec<String> = spec.command.iter().map(|a| shell_quote(a)).collect();
+        Self::render(alias, layout, &quoted.join(" "), spec.gui)
+    }
+
+    fn render(alias: &str, layout: &InstanceLayout, exec_target: &str, gui: bool) -> String {
+        let instance_dir = shell_quote(&layout.root.to_string_lossy());
+        let runtime_block = if gui {
+            // Graphical apps talk to the Wayland socket, PipeWire and the
+            // session bus under the *host* $XDG_RUNTIME_DIR. Overriding it
+            // (as CLI instances do) would hide those sockets and break the
+            // app, so GUI launchers keep the host value and expose the
+            // sandbox runtime side-channel as $WARREN_RUNTIME_DIR.
+            r#": "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+export XDG_RUNTIME_DIR
+export WARREN_HOST_RUNTIME_DIR="$XDG_RUNTIME_DIR"
+export WARREN_RUNTIME_DIR="${WARREN_INSTANCE_DIR}/runtime"
+mkdir -p "$WARREN_RUNTIME_DIR""#
+        } else {
+            r#"export XDG_RUNTIME_DIR="${WARREN_INSTANCE_DIR}/runtime""#
+        };
         format!(
             r#"#!/usr/bin/env bash
 # Warren launcher — {alias}
@@ -16,24 +50,35 @@ impl Launcher {
 
 set -euo pipefail
 
-WARREN_INSTANCE_DIR="{instance_dir}"
+WARREN_INSTANCE_DIR={instance_dir}
 
 export HOME="${{WARREN_INSTANCE_DIR}}/home"
 export XDG_CONFIG_HOME="${{WARREN_INSTANCE_DIR}}/config"
 export XDG_CACHE_HOME="${{WARREN_INSTANCE_DIR}}/cache"
 export XDG_DATA_HOME="${{WARREN_INSTANCE_DIR}}/data"
 export XDG_STATE_HOME="${{WARREN_INSTANCE_DIR}}/state"
-export XDG_RUNTIME_DIR="${{WARREN_INSTANCE_DIR}}/runtime"
+{runtime_block}
 export TMPDIR="${{WARREN_INSTANCE_DIR}}/tmp"
 export WARREN_INSTANCE="{alias}"
 export WARREN_INSTANCE_DIR
 
-exec "${{WARREN_INSTANCE_DIR}}/bin/{binary_name}" "$@"
+# --- GUI / desktop session passthrough -----------------------------------
+# These are inherited on exec, but listed explicitly so graphical apps keep
+# working under the sandbox (display server, keyring, audio, ssh-agent).
+for _wvar in DISPLAY WAYLAND_DISPLAY XAUTHORITY DBUS_SESSION_BUS_ADDRESS \
+    SESSION_MANAGER DESKTOP_SESSION XDG_SESSION_TYPE XDG_CURRENT_DESKTOP \
+    XDG_SESSION_DESKTOP PULSE_SERVER PULSE_COOKIE SSH_AUTH_SOCK; do
+  if [ -n "${{!_wvar:-}}" ]; then export "$_wvar"; fi
+done
+unset _wvar
+
+exec {exec_target} "$@"
 "#,
             alias = alias,
             version = env!("CARGO_PKG_VERSION"),
             instance_dir = instance_dir,
-            binary_name = binary_name,
+            runtime_block = runtime_block,
+            exec_target = exec_target,
         )
     }
 
@@ -54,8 +99,9 @@ exec "${{WARREN_INSTANCE_DIR}}/bin/{binary_name}" "$@"
         let target = bin_dir.join(alias);
         let launcher = layout.launcher_path();
         if target.exists() || target.symlink_metadata().is_ok() {
-            std::fs::remove_file(&target)
-                .with_context(|| format!("failed to remove existing launcher at {}", target.display()))?;
+            std::fs::remove_file(&target).with_context(|| {
+                format!("failed to remove existing launcher at {}", target.display())
+            })?;
         }
         match std::os::unix::fs::symlink(&launcher, &target) {
             Ok(()) => {
@@ -80,5 +126,74 @@ exec "${{WARREN_INSTANCE_DIR}}/bin/{binary_name}" "$@"
             tracing::debug!(path = %target.display(), "removed launcher");
         }
         Ok(())
+    }
+}
+
+/// Single-quote a shell word: `o'clock` → `'o'\''clock'`.
+pub fn shell_quote(s: &str) -> String {
+    if s.is_empty() {
+        return "''".to_string();
+    }
+    if s.chars().all(|c| {
+        c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/' | ':' | '=' | ',' | '+')
+    }) {
+        return s.to_string();
+    }
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn layout() -> InstanceLayout {
+        InstanceLayout {
+            root: PathBuf::from("/home/u/.warren/instances/demo"),
+            alias: "demo".to_string(),
+        }
+    }
+
+    #[test]
+    fn cli_launcher_overrides_runtime_and_execs_bin() {
+        let out = Launcher::generate_file("demo", &layout(), "mybin", false);
+        assert!(out.contains("export XDG_RUNTIME_DIR=\"${WARREN_INSTANCE_DIR}/runtime\""));
+        assert!(out.contains("exec ${WARREN_INSTANCE_DIR}/bin/mybin \"$@\""));
+        assert!(out.contains("WAYLAND_DISPLAY"));
+    }
+
+    #[test]
+    fn gui_wrapped_launcher_keeps_host_runtime() {
+        let spec = LaunchSpec {
+            display_name: "discord".to_string(),
+            command: vec![
+                "flatpak".to_string(),
+                "run".to_string(),
+                "com.discordapp.Discord".to_string(),
+            ],
+            gui: true,
+            icon: None,
+            desktop_id: None,
+        };
+        let out = Launcher::generate_wrapped("discord-work", &layout(), &spec);
+        assert!(out.contains("WARREN_HOST_RUNTIME_DIR"));
+        assert!(!out.contains("export XDG_RUNTIME_DIR=\"${WARREN_INSTANCE_DIR}/runtime\""));
+        assert!(out.contains("exec flatpak run com.discordapp.Discord \"$@\""));
+    }
+
+    #[test]
+    fn quoting_escapes_spaces_and_single_quotes() {
+        assert_eq!(shell_quote("plain-1.2:/x"), "plain-1.2:/x");
+        assert_eq!(shell_quote(""), "''");
+        assert_eq!(shell_quote("/opt/my app/run"), "'/opt/my app/run'");
+        assert_eq!(shell_quote("o'clock"), "'o'\\''clock'");
+        let spec = LaunchSpec {
+            display_name: "x".to_string(),
+            command: vec!["/opt/my app/run".to_string(), "--flag".to_string()],
+            gui: false,
+            icon: None,
+            desktop_id: None,
+        };
+        let out = Launcher::generate_wrapped("x", &layout(), &spec);
+        assert!(out.contains("exec '/opt/my app/run' --flag \"$@\""));
     }
 }
