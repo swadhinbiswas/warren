@@ -64,6 +64,9 @@ flate2 = "1"
 futures-util = "0.3"
 tokio-util = { version = "0.7", features = ["io"] }
 
+# File timestamps for clone
+filetime = "0.2"
+
 [profile.release]
 strip = true
 lto = true

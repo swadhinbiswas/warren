@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -58,14 +58,16 @@ fn default_session_keep() -> usize {
 
 fn default_instances_dir() -> PathBuf {
     dirs::home_dir()
-        .expect("could not determine home directory")
+        .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
         .join(".warren")
         .join("instances")
 }
 
 fn default_bin_dir() -> PathBuf {
     dirs::home_dir()
-        .expect("could not determine home directory")
+        .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
         .join(".local")
         .join("bin")
 }
@@ -107,18 +109,20 @@ impl Default for SessionsConfig {
 }
 
 impl WarrenConfig {
-    pub fn warren_dir() -> PathBuf {
-        dirs::home_dir()
-            .expect("could not determine home directory")
-            .join(".warren")
-    }
-
     pub fn config_path() -> PathBuf {
-        Self::warren_dir().join("config.toml")
+        Self::warren_dir_raw().join("config.toml")
     }
 
     pub fn sessions_dir() -> PathBuf {
-        Self::warren_dir().join("sessions")
+        Self::warren_dir_raw().join("sessions")
+    }
+
+    /// Non-Result version for internal use where we have a reasonable fallback.
+    pub(crate) fn warren_dir_raw() -> PathBuf {
+        dirs::home_dir()
+            .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
+            .unwrap_or_else(|| PathBuf::from("/tmp"))
+            .join(".warren")
     }
 
     pub fn load() -> Result<Self> {
@@ -132,6 +136,15 @@ impl WarrenConfig {
         } else {
             Ok(Self::default())
         }
+    }
+
+    /// Validate that a real home directory exists. Warren needs ~/.warren
+    /// to store instances, so refusing early gives a clear error.
+    pub fn validate_home() -> Result<()> {
+        if dirs::home_dir().is_none() && std::env::var_os("HOME").is_none() {
+            bail!("could not determine home directory. Set the HOME environment variable.");
+        }
+        Ok(())
     }
 
     pub fn ensure_dirs(&self) -> Result<()> {

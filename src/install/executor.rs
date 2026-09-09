@@ -16,6 +16,10 @@ impl InstallerExecutor {
             )
         })?;
         tracing::info!(script = %script_path.display(), instance = %layout.alias, "executing installer");
+        let data_dirs = format!(
+            "{}:/usr/local/share:/usr/share:/var/lib/flatpak/exports/share",
+            layout.data_dir().display()
+        );
         let output = tokio::process::Command::new("bash")
             .arg(script_path)
             .current_dir(&layout.root)
@@ -23,6 +27,8 @@ impl InstallerExecutor {
             .env("XDG_CONFIG_HOME", layout.config_dir())
             .env("XDG_CACHE_HOME", layout.cache_dir())
             .env("XDG_DATA_HOME", layout.data_dir())
+            .env("XDG_DATA_DIRS", &data_dirs)
+            .env("XDG_CONFIG_DIRS", "/etc/xdg")
             .env("XDG_STATE_HOME", layout.state_dir())
             .env("XDG_RUNTIME_DIR", layout.runtime_dir())
             .env("TMPDIR", layout.tmp_dir())

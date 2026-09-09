@@ -3,12 +3,13 @@
 # Warren — beautiful automated installer.
 #
 # Install immediately with the one-liner:
-#   curl -fsSL https://raw.githubusercontent.com/swadhinbiswas/warren/main/install.sh | bash
+#   curl -fsSL https://warren.run/install.sh | bash
 #
 # Or download first, then install (downloading alone installs nothing):
-#   curl -fsSL https://raw.githubusercontent.com/swadhinbiswas/warren/main/install.sh -o install.sh
+#   curl -fsSL https://warren.run/install.sh -o install.sh
 #   bash install.sh                 # install
 #   bash install.sh --from-source   # always build from source
+#   bash install.sh --version v0.1.6  # install a specific version
 
 set -euo pipefail
 
@@ -17,13 +18,31 @@ REPO_URL="https://github.com/${REPO}"
 DEFAULT_REF="main"
 
 SOURCE_REF="${WARREN_REF:-$DEFAULT_REF}"
-BIN_DIR="${WARREN_BIN_DIR:-$HOME/.local/bin}"
+BIN_DIR="${WARREN_BIN_DIR:-${HOME}/.local/bin}"
 FROM_SOURCE=false
+VERSION_TAG=""
 
 for arg in "$@"; do
     case "$arg" in
         --from-source) FROM_SOURCE=true ;;
+        --version)
+            shift
+            VERSION_TAG="${1:-}"
+            [ -n "$VERSION_TAG" ] || { echo "  ✗  --version requires a value (e.g., v0.1.6)" >&2; exit 1; }
+            SOURCE_REF="$VERSION_TAG"
+            ;;
+        -v|--version-flag)
+            echo "warren-installer"
+            exit 0
+            ;;
         -h|--help) ;;
+        --uninstall)
+            echo "  To uninstall Warren:"
+            echo "    rm -f ${BIN_DIR}/warren"
+            echo "    rm -rf ~/.warren"
+            echo "    # Also remove the 'warren' line from your shell rc file"
+            exit 0
+            ;;
         *) echo "  ✗  Unknown option: $arg" >&2; echo "     Run 'bash install.sh --help' for usage." >&2; exit 1 ;;
     esac
 done
@@ -77,15 +96,17 @@ usage() {
     banner
     cat <<'EOF'
   Usage:
-    curl -fsSL https://raw.githubusercontent.com/swadhinbiswas/warren/main/install.sh | bash
-    curl -fsSL https://raw.githubusercontent.com/swadhinbiswas/warren/main/install.sh -o install.sh
-    bash install.sh [--from-source]
+    curl -fsSL https://warren.run/install.sh | bash
+    curl -fsSL https://warren.run/install.sh -o install.sh
+    bash install.sh [OPTIONS]
 
   NOTE: downloading with -o only saves the file — run `bash install.sh`
   afterwards to actually install Warren.
 
   Options:
     --from-source    Always build from source (skips pre-built binary)
+    --version TAG    Install a specific version (e.g., v0.1.6)
+    --uninstall      Show uninstall instructions
     --help           Show this help
 
   Environment:
@@ -171,6 +192,12 @@ die_no_cargo() {
     exit 1
 }
 
+die_no_home() {
+    err "Could not determine your home directory."
+    err "Set the HOME environment variable and try again."
+    exit 1
+}
+
 require_cargo() {
     command -v cargo >/dev/null 2>&1 || die_no_cargo
 }
@@ -198,7 +225,7 @@ latest_tag() {
 
 short_home() {
     case "$1" in
-        "$HOME"*) echo "~${1#$HOME}" ;;
+        "${HOME}"*) echo "~${1#$HOME}" ;;
         *) echo "$1" ;;
     esac
 }
@@ -213,9 +240,16 @@ install_prebuilt() {
     local triple url
     triple="$(detect_triple)"
     [ -n "$triple" ] || return 1
-    url="${REPO_URL}/releases/latest/download/warren-linux-${triple}.tar.gz"
+
+    # If a specific version was requested, use that instead of latest
+    local release_path="latest"
+    if [ -n "$VERSION_TAG" ]; then
+        release_path="tags/${VERSION_TAG}"
+    fi
+
+    url="${REPO_URL}/releases/${release_path}/download/warren-linux-${triple}.tar.gz"
     info "Downloading pre-built binary (${triple})…"
-    if curl --output /dev/null --silent --head --fail "$url"; then
+    if curl --output /dev/null --silent --head --fail "$url" 2>/dev/null; then
         local tmp
         tmp="$(mktemp -d)"
         spinner_start "Fetching warren-linux-${triple}.tar.gz"
@@ -226,6 +260,7 @@ install_prebuilt() {
             return 1
         fi
         spinner_stop ok "Download complete"
+        [ -f "$tmp/warren" ] || { err "Archive did not contain a 'warren' binary"; rm -rf "$tmp"; return 1; }
         mv "$tmp/warren" "$BIN_DIR/warren"
         chmod +x "$BIN_DIR/warren"
         rm -rf "$tmp"
@@ -294,6 +329,7 @@ summary() {
     echo -e "  ${BOLD}Docs${NC}     ${REPO_URL}"
     echo
     echo -e "  ${BOLD}Quick start${NC}"
+    echo -e "  ${DIM}\$${NC} warren dig gh --as gh-work"
     echo -e "  ${DIM}\$${NC} warren dig flatpak:com.discordapp.Discord --as discord-work"
     echo -e "  ${DIM}\$${NC} warren session save && warren session restore"
     echo -e "  ${DIM}\$${NC} warren --help"
@@ -316,8 +352,13 @@ banner
 [ "$(uname -s)" = "Linux" ] || die_os
 require_curl
 
+# Check HOME is set
+[ -n "${HOME:-}" ] || die_no_home
+
 TAG="$(latest_tag)"
-if [ -n "$TAG" ]; then
+if [ -n "$VERSION_TAG" ]; then
+    dim "Version: ${VERSION_TAG}   ·   Arch: $(uname -m)   ·   Mode: $([ "$FROM_SOURCE" = true ] && echo "from source" || echo "pre-built preferred")"
+elif [ -n "$TAG" ]; then
     dim "Latest release: ${TAG}   ·   Arch: $(uname -m)   ·   Mode: $([ "$FROM_SOURCE" = true ] && echo "from source" || echo "pre-built preferred")"
 else
     dim "Arch: $(uname -m)   ·   Mode: $([ "$FROM_SOURCE" = true ] && echo "from source" || echo "pre-built preferred")"

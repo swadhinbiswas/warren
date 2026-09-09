@@ -67,12 +67,17 @@ pub enum Command {
         #[arg(long, short)]
         yes: bool,
     },
-    /// Clone an instance into a new one
+    /// Clone an instance into a new, independent app (fresh storage)
     Clone {
         /// Source instance alias
         source: String,
         /// Destination alias for the clone
         dest: String,
+        /// Also copy user data (logins, configs, caches). By default only
+        /// the program is copied and the clone starts with empty storage,
+        /// like a first-time install.
+        #[arg(long)]
+        copy_data: bool,
     },
     /// Export an instance to a portable archive
     Export {
@@ -89,6 +94,10 @@ pub enum Command {
         /// Alias for the imported instance
         #[arg(long = "as", value_name = "ALIAS")]
         alias: Option<String>,
+        /// Start with empty storage (no logins or data from the archive).
+        /// By default the archive's data is restored as-is.
+        #[arg(long)]
+        fresh: bool,
     },
     /// Show warren environment information
     Env,

@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Bug:** `WarrenConfig::warren_dir()` and related functions no longer
+  panic with `.expect("could not determine home directory")` when HOME is
+  unset. Falls back to `$HOME` env var, then `/tmp`, and validates at
+  startup with a clear error message.
+- **Bug:** `app::desktop::applications_dir()` no longer panics when the
+  data directory cannot be determined. Falls back gracefully.
+- **Bug:** `export::execute` no longer calls `.unwrap()` on
+  `std::env::current_dir()`. Falls back to temp directory on error.
+- **Bug:** `InstallerRewriter::new` no longer falls back to literal `$HOME`
+  when home dir is unknown (which silently broke path rewriting). Now
+  defaults to empty string, preventing broken rewrites.
+- Installer now validates that `$HOME` is set before proceeding.
+- Installer adds `--version` flag to install a specific release.
+- Installer adds `--uninstall` flag with removal instructions.
+
+### Added
+- Landing page at `site/index.html` for `warren.run` domain.
+
 ## [0.1.6] - 2026-09-05
 
 ### Added

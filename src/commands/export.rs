@@ -18,9 +18,10 @@ pub async fn execute(
         bail!("instance '{}' not found", alias);
     }
     let output_path = out.map(|p| p.to_path_buf()).unwrap_or_else(|| {
-        std::env::current_dir()
-            .unwrap()
-            .join(format!("{}.warren.tar.gz", alias))
+        let dir = std::env::current_dir()
+            .context("failed to determine current directory (has it been deleted?)")
+            .unwrap_or_else(|_| std::env::temp_dir());
+        dir.join(format!("{}.warren.tar.gz", alias))
     });
     theme.step(
         "📦",

@@ -122,6 +122,11 @@ pub fn scan_running_apps() -> Vec<SessionApp> {
         if binary.is_empty() {
             continue;
         }
+        // Skip Flatpak wrapper processes (bwrap, zypak-wrapper) — they are
+        // not directly launchable and would clutter the session snapshot.
+        if binary == "bwrap" || binary == "zypak-wrapper" || binary.contains("zypak") {
+            continue;
+        }
         if is_helper_binary(&binary) {
             continue;
         }
@@ -420,6 +425,8 @@ fn is_helper_binary(binary: &str) -> bool {
             | "sh"
             | "-sh"
             | "dash"
+            | "bwrap"
+            | "zypak-wrapper"
     )
 }
 

@@ -69,15 +69,23 @@ pub async fn execute(config: &WarrenConfig, theme: &Theme, alias: &str, yes: boo
             metadata.install.installer_hash = Some(hash);
         }
         SourceInfo::Package { name } => {
+            // For system packages, attempt to re-resolve the binary path.
+            // The actual package update must be done by the user via
+            // their package manager (warren stays rootless).
             theme.warn(&format!(
-                "Package source '{}' — manual update not supported yet.",
-                name
+                "Package source '{}' — warren cannot update system packages. \
+                 Update with your package manager (e.g., `sudo apt upgrade {}`), \
+                 then run `warren update {}` to refresh the launcher.",
+                name, name, alias
             ));
             return Ok(());
         }
-        // Wrap mode: nothing is installed, so "update" re-resolves the host
-        // app (picks up a new binary location / desktop entry) and rewrites
-        // the launcher + desktop file. Account data is never touched.
+        // Wrap mode: nothing is installed, so "update" only re-resolves
+        // the host app (picks up a new binary location / desktop entry)
+        // and rewrites the launcher + desktop file. Account data is never
+        // touched — and the *host* app is never modified either: run
+        // `flatpak update` / your package manager yourself if you want a
+        // newer host binary, then `warren update` to re-resolve it.
         SourceInfo::Flatpak { .. }
         | SourceInfo::Snap { .. }
         | SourceInfo::System { .. }

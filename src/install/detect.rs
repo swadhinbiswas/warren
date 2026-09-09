@@ -34,6 +34,10 @@ pub fn detect_version(layout: &InstanceLayout, binary_name: &str) -> Option<Stri
     if !binary_path.exists() {
         return None;
     }
+    let data_dirs = format!(
+        "{}:/usr/local/share:/usr/share:/var/lib/flatpak/exports/share",
+        layout.data_dir().display()
+    );
     for flag in &["--version", "-v", "-V", "version"] {
         let output = std::process::Command::new(&binary_path)
             .arg(flag)
@@ -41,6 +45,8 @@ pub fn detect_version(layout: &InstanceLayout, binary_name: &str) -> Option<Stri
             .env("XDG_CONFIG_HOME", layout.config_dir())
             .env("XDG_CACHE_HOME", layout.cache_dir())
             .env("XDG_DATA_HOME", layout.data_dir())
+            .env("XDG_DATA_DIRS", &data_dirs)
+            .env("XDG_CONFIG_DIRS", "/etc/xdg")
             .env("XDG_STATE_HOME", layout.state_dir())
             .env("XDG_RUNTIME_DIR", layout.runtime_dir())
             .env("TMPDIR", layout.tmp_dir())

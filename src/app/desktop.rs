@@ -18,7 +18,12 @@ pub fn applications_dir() -> PathBuf {
     let base = std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .or_else(|| dirs::home_dir().map(|h| h.join(".local/share")))
-        .expect("could not determine data directory");
+        .unwrap_or_else(|| {
+            dirs::home_dir()
+                .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
+                .unwrap_or_else(|| PathBuf::from("/tmp"))
+                .join(".local/share")
+        });
     base.join("applications")
 }
 
@@ -46,8 +51,12 @@ pub fn install(
     if let Some(icon) = icon.filter(|i| !i.is_empty()) {
         content.push_str(&format!("Icon={icon}\n"));
     }
+    // StartupWMClass must match the actual WMClass of the application window,
+    // not a warren-specific value. Most apps set WMClass to their app name.
+    // For wrapped apps, we use the app name lowercase as a heuristic.
+    let wm_class = display_name.to_ascii_lowercase();
     content.push_str(&format!(
-        "Terminal={}\nCategories=Warren;\nStartupNotify=true\nStartupWMClass=warren-{alias}\nX-Warren-Alias={alias}\nX-Warren-Version={}\n",
+        "Terminal={}\nCategories=Warren;\nStartupNotify=true\nStartupWMClass={wm_class}\nX-Warren-Alias={alias}\nX-Warren-Version={}\n",
         if terminal { "true" } else { "false" },
         env!("CARGO_PKG_VERSION"),
     ));
@@ -103,6 +112,8 @@ mod tests {
         assert!(content.contains("Terminal=false"));
         assert!(content.contains("Icon=discord"));
         assert!(content.contains("X-Warren-Alias=discord-work"));
+        assert!(content.contains("StartupWMClass=discord"));
+        assert!(!content.contains("StartupWMClass=warren-"));
         uninstall("discord-work").unwrap();
         assert!(!path.exists());
         unsafe { std::env::remove_var("WARREN_APPLICATIONS_DIR") };

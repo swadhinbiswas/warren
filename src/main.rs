@@ -7,6 +7,7 @@ mod commands;
 mod config;
 mod install;
 mod instance;
+mod lock;
 mod session;
 mod shell;
 mod ui;
@@ -20,6 +21,12 @@ async fn main() {
     if is_root() {
         let theme = ui::theme::Theme::new();
         theme.error("warren refuses to run as root. Please run as a normal user.");
+        std::process::exit(1);
+    }
+
+    if let Err(err) = config::WarrenConfig::validate_home() {
+        let theme = ui::theme::Theme::new();
+        theme.error(&err.to_string());
         std::process::exit(1);
     }
 

@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warren — Install any CLI tool unlimited times</title>
+    <meta name="description" content="Warren is a rootless, zero-daemon CLI runtime for Linux. Install and run unlimited isolated instances of any CLI, TUI, or GUI application.">
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/swadhinbiswas/warren/main/assets/logo.png">
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --surface: #12121a;
+            --surface2: #1a1a26;
+            --border: #2a2a3a;
+            --text: #e4e4ef;
+            --text-dim: #8888a0;
+            --accent: #00d4aa;
+            --accent2: #7c5cff;
+            --accent3: #ff6b6b;
+            --code-bg: #0d0d14;
+            --gradient: linear-gradient(135deg, #00d4aa 0%, #7c5cff 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            background: rgba(10, 10, 15, 0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .nav-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 64px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: var(--text);
+            text-decoration: none;
+        }
+
+        .logo img {
+            width: 32px;
+            height: 32px;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .nav-links a {
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text);
+        }
+
+        .nav-links .btn {
+            background: var(--gradient);
+            color: #fff;
+            padding: 8px 18px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-decoration: none;
+            transition: opacity 0.2s, transform 0.2s;
+        }
+
+        .nav-links .btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+            color: #fff;
+        }
+
+        /* Hero */
+        .hero {
+            padding: 140px 0 80px;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 800px;
+            height: 600px;
+            background: radial-gradient(ellipse at center, rgba(0, 212, 170, 0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero h1 {
+            font-size: clamp(2.5rem, 6vw, 4rem);
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 20px;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero .tagline {
+            font-size: 1.25rem;
+            color: var(--text-dim);
+            max-width: 600px;
+            margin: 0 auto 40px;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 48px;
+        }
+
+        .btn-primary {
+            background: var(--gradient);
+            color: #fff;
+            padding: 14px 28px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 1rem;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: opacity 0.2s, transform 0.2s;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: var(--surface2);
+            color: var(--text);
+            padding: 14px 28px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 1rem;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid var(--border);
+            transition: border-color 0.2s, transform 0.2s;
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+        }
+
+        /* Code block */
+        .code-block {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px 24px;
+            text-align: left;
+            max-width: 600px;
+            margin: 0 auto;
+            font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Monaco, monospace;
+            font-size: 0.85rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .code-block .prompt {
+            color: var(--accent);
+        }
+
+        .code-block .comment {
+            color: var(--text-dim);
+        }
+
+        .code-block .cmd {
+            color: var(--text);
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: color 0.2s, border-color 0.2s;
+        }
+
+        .copy-btn:hover {
+            color: var(--text);
+            border-color: var(--accent);
+        }
+
+        /* Features */
+        .features {
+            padding: 80px 0;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .section-subtitle {
+            text-align: center;
+            color: var(--text-dim);
+            margin-bottom: 48px;
+            font-size: 1.05rem;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+        }
+
+        .feature-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            transition: border-color 0.2s, transform 0.2s;
+        }
+
+        .feature-card:hover {
+            border-color: var(--accent);
+            transform: translateY(-4px);
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: 16px;
+        }
+
+        .feature-card h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .feature-card p {
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }
+
+        /* How it works */
+        .how-it-works {
+            padding: 80px 0;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 32px;
+            margin-top: 48px;
+        }
+
+        .step {
+            text-align: center;
+        }
+
+        .step-number {
+            width: 48px;
+            height: 48px;
+            background: var(--gradient);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.2rem;
+            margin: 0 auto 16px;
+        }
+
+        .step h3 {
+            font-size: 1rem;
+            margin-bottom: 8px;
+        }
+
+        .step p {
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }
+
+        /* Demo */
+        .demo {
+            padding: 80px 0;
+        }
+
+        .demo-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-top: 48px;
+        }
+
+        @media (max-width: 768px) {
+            .demo-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .demo-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .demo-header {
+            background: var(--surface2);
+            padding: 12px 16px;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .demo-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .demo-dot.red { background: #ff5f56; }
+        .demo-dot.yellow { background: #ffbd2e; }
+        .demo-dot.green { background: #27c93f; }
+
+        .demo-body {
+            padding: 20px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.8rem;
+            line-height: 1.8;
+        }
+
+        .demo-body .line {
+            display: block;
+        }
+
+        .demo-body .prompt { color: var(--accent); }
+        .demo-body .output { color: var(--text-dim); }
+        .demo-body .highlight { color: var(--accent2); }
+
+        /* Install section */
+        .install {
+            padding: 80px 0;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .install-methods {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-top: 48px;
+        }
+
+        .install-card {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+        }
+
+        .install-card h3 {
+            font-size: 1rem;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .install-card p {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            margin-bottom: 16px;
+        }
+
+        .install-card .code-block {
+            margin: 0;
+            font-size: 0.75rem;
+        }
+
+        /* Comparison table */
+        .comparison {
+            padding: 80px 0;
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 48px;
+            font-size: 0.9rem;
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            padding: 14px 20px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .comparison-table th {
+            color: var(--text-dim);
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .comparison-table tr:hover td {
+            background: var(--surface);
+        }
+
+        .check { color: var(--accent); }
+        .cross { color: var(--accent3); }
+
+        /* Footer */
+        footer {
+            padding: 40px 0;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            margin-bottom: 16px;
+        }
+
+        .footer-links a {
+            color: var(--text-dim);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .footer-links a:hover {
+            color: var(--text);
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate {
+            animation: fadeInUp 0.6s ease-out forwards;
+        }
+
+        .delay-1 { animation-delay: 0.1s; opacity: 0; }
+        .delay-2 { animation-delay: 0.2s; opacity: 0; }
+        .delay-3 { animation-delay: 0.3s; opacity: 0; }
+        .delay-4 { animation-delay: 0.4s; opacity: 0; }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="container nav-inner">
+            <a href="#" class="logo">
+                <img src="https://raw.githubusercontent.com/swadhinbiswas/warren/main/assets/logo.png" alt="Warren">
+                Warren
+            </a>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#how-it-works">How it Works</a>
+                <a href="#install">Install</a>
+                <a href="https://github.com/swadhinbiswas/warren">GitHub</a>
+                <a href="#install" class="btn">Get Started</a>
+            </div>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <div class="container">
+            <h1 class="animate">Install any CLI tool<br>unlimited times.</h1>
+            <p class="tagline animate delay-1">Every instance is its own world. Rootless, zero-daemon, completely isolated.</p>
+            <div class="hero-buttons animate delay-2">
+                <a href="#install" class="btn-primary">Get Warren</a>
+                <a href="https://github.com/swadhinbiswas/warren" class="btn-secondary">View on GitHub</a>
+            </div>
+            <div class="code-block animate delay-3">
+                <button class="copy-btn" onclick="copyInstall()">copy</button>
+                <span class="prompt">$</span> <span class="cmd">curl -fsSL https://warren.run/install.sh | bash</span>
+                <br><br>
+                <span class="comment"># or install a specific tool</span>
+                <br>
+                <span class="prompt">$</span> <span class="cmd">warren dig gh --as gh-work</span>
+                <br>
+                <span class="prompt">$</span> <span class="cmd">warren dig gh --as gh-personal</span>
+            </div>
+        </div>
+    </section>
+
+    <section class="features" id="features">
+        <div class="container">
+            <h2 class="section-title">Why Warren?</h2>
+            <p class="section-subtitle">Run the same app many times with different accounts, configs, and data.</p>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Total Isolation</h3>
+                    <p>Each instance gets its own HOME, config, cache, data, and tmp directories. Nothing leaks between instances.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎭</div>
+                    <h3>Unlimited Aliases</h3>
+                    <p>Install the same tool as many times as you want with different names. <code>gh-work</code>, <code>gh-personal</code>, <code>gh-side</code>.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🖥️</div>
+                    <h3>GUI App Wrapping</h3>
+                    <p>Run two Discords, two Firefox profiles, two VS Code instances — each with separate logins and data.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🚫</div>
+                    <h3>Rootless by Design</h3>
+                    <p>Warren refuses to run as root. No sudo, no daemons, no containers. Just a thin bash launcher.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Zero Overhead</h3>
+                    <p>No VMs, no containers, no background processes. Startup overhead is under 50ms.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🐚</div>
+                    <h3>Universal Shell</h3>
+                    <p>Works with Bash, Zsh, Fish, and Nushell. Auto-detects and configures your PATH.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="how-it-works" id="how-it-works">
+        <div class="container">
+            <h2 class="section-title">How it Works</h2>
+            <p class="section-subtitle">Three simple levers achieve total isolation.</p>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3>Intelligent Rewriting</h3>
+                    <p>Warren intercepts installer scripts and rewrites hardcoded paths (<code>/usr/local/bin</code>, <code>~/.config</code>) to point inside the instance's private directory.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3>Environment Injection</h3>
+                    <p>A lightweight launcher overrides <code>$HOME</code>, <code>$XDG_CONFIG_HOME</code>, <code>$XDG_DATA_HOME</code>, and <code>$TMPDIR</code> before running your tool.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3>Execution</h3>
+                    <p>The application boots entirely unaware that its "home directory" is a sandbox inside <code>~/.warren/</code>.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="demo">
+        <div class="container">
+            <h2 class="section-title">See it in Action</h2>
+            <p class="section-subtitle">Two GitHub CLIs, two accounts, zero conflicts.</p>
+            <div class="demo-grid">
+                <div class="demo-card">
+                    <div class="demo-header">
+                        <span class="demo-dot red"></span>
+                        <span class="demo-dot yellow"></span>
+                        <span class="demo-dot green"></span>
+                        <span>Terminal</span>
+                    </div>
+                    <div class="demo-body">
+                        <span class="line"><span class="prompt">$</span> warren dig gh --as gh-work</span>
+                        <span class="line output">  ✓ Installed: gh-work</span>
+                        <span class="line output">  ✓ Launcher: ~/.local/bin/gh-work</span>
+                        <span class="line"></span>
+                        <span class="line"><span class="prompt">$</span> warren dig gh --as gh-personal</span>
+                        <span class="line output">  ✓ Installed: gh-personal</span>
+                        <span class="line output">  ✓ Launcher: ~/.local/bin/gh-personal</span>
+                        <span class="line"></span>
+                        <span class="line"><span class="prompt">$</span> <span class="highlight">gh-work</span> auth login</span>
+                        <span class="line output">  ✓ Logged into github.com as @work-account</span>
+                        <span class="line"></span>
+                        <span class="line"><span class="prompt">$</span> <span class="highlight">gh-personal</span> auth login</span>
+                        <span class="line output">  ✓ Logged into github.com as @personal-account</span>
+                    </div>
+                </div>
+                <div class="demo-card">
+                    <div class="demo-header">
+                        <span class="demo-dot red"></span>
+                        <span class="demo-dot yellow"></span>
+                        <span class="demo-dot green"></span>
+                        <span>Desktop</span>
+                    </div>
+                    <div class="demo-body">
+                        <span class="line"><span class="prompt">$</span> warren dig flatpak:com.discordapp.Discord --as discord-work</span>
+                        <span class="line output">  ✓ Wrapped: discord-work (Discord account #1)</span>
+                        <span class="line output">  ✓ Desktop entry created</span>
+                        <span class="line"></span>
+                        <span class="line"><span class="prompt">$</span> warren dig flatpak:com.discordapp.Discord --as discord-home</span>
+                        <span class="line output">  ✓ Wrapped: discord-home (Discord account #2)</span>
+                        <span class="line output">  ✓ Desktop entry created</span>
+                        <span class="line"></span>
+                        <span class="line"><span class="prompt">$</span> warren ls</span>
+                        <span class="line output">  ALIAS            APP         VERSION  KIND</span>
+                        <span class="line output">  discord-work     discord     -        gui</span>
+                        <span class="line output">  discord-home     discord     -        gui</span>
+                        <span class="line output">  gh-work          gh          2.4.0    cli</span>
+                        <span class="line output">  gh-personal      gh          2.4.0    cli</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="install" id="install">
+        <div class="container">
+            <h2 class="section-title">Install Warren</h2>
+            <p class="section-subtitle">One line. No dependencies beyond curl.</p>
+            <div class="install-methods">
+                <div class="install-card">
+                    <h3>One-Liner (Recommended)</h3>
+                    <p>Downloads a pre-built binary or builds from source if needed.</p>
+                    <div class="code-block" style="position: relative;">
+                        <button class="copy-btn" onclick="copyOneLiner()">copy</button>
+                        <span class="prompt">$</span> <span class="cmd">curl -fsSL https://warren.run/install.sh | bash</span>
+                    </div>
+                </div>
+                <div class="install-card">
+                    <h3>Cargo</h3>
+                    <p>If you already have Rust installed.</p>
+                    <div class="code-block">
+                        <span class="prompt">$</span> <span class="cmd">cargo install warren-cli</span>
+                        <br>
+                        <span class="prompt">$</span> <span class="cmd">warren shell install</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="comparison">
+        <div class="container">
+            <h2 class="section-title">Warren vs. the Rest</h2>
+            <p class="section-subtitle">Why not just use Docker, Nix, or symlinks?</p>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th>Warren</th>
+                        <th>Docker</th>
+                        <th>Nix</th>
+                        <th>Symlinks</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Rootless</td>
+                        <td><span class="check">✓</span></td>
+                        <td><span class="cross">✗</span></td>
+                        <td><span class="check">✓</span></td>
+                        <td><span class="check">✓</span></td>
+                    </tr>
+                    <tr>
+                        <td>Per-instance data</td>
+                        <td><span class="check">✓</span></td>
+                        <td><span class="check">✓</span></td>
+                        <td><span class="cross">✗</span></td>
+                        <td><span class="cross">✗</span></td>
+                    </tr>
+                    <tr>
+                        <td>GUI app support</td>
+                        <td><span class="check">✓</span></td>
+                        <td><span class="check">✓</span></td>
+                        <td><span class="cross">✗</span></td>
+                        <td><span class="cross">✗</span></td>
+                    </tr>
+                    <tr>
+                        <td>Desktop integration</td>
+                        <td><span class="check">✓</span></td>
+                        <td><span class="cross">✗</span></td>
+                        <td><span class="cross">✗</span></td>
+                        <td><span class="cross">✗</span></td>
+                    </tr>
+                    <tr>
+                        <td>Zero overhead</td>
+                        <td><span class="check">✓</span></td>
+                        <td><span class="cross">✗</span></td>
+                        <td><span class="check">✓</span></td>
+                        <td><span class="check">✓</span></td>
+                    </tr>
+                    <tr>
+                        <td>No daemon</td>
+                        <td><span class="check">✓</span></td>
+                        <td><span class="cross">✗</span></td>
+                        <td><span class="check">✓</span></td>
+                        <td><span class="check">✓</span></td>
+                    </tr>
+                    <tr>
+                        <td>Session restore</td>
+                        <td><span class="check">✓</span></td>
+                        <td><span class="cross">✗</span></td>
+                        <td><span class="cross">✗</span></td>
+                        <td><span class="cross">✗</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <div class="footer-links">
+                <a href="https://github.com/swadhinbiswas/warren">GitHub</a>
+                <a href="https://crates.io/crates/warren-cli">crates.io</a>
+                <a href="https://github.com/swadhinbiswas/warren/blob/main/LICENSE.md">MIT License</a>
+                <a href="https://github.com/swadhinbiswas/warren/blob/main/README.md">Documentation</a>
+            </div>
+            <p>Warren is created by <a href="https://github.com/swadhinbiswas" style="color: var(--accent);">Swadhin Biswas</a>. Released under the MIT License.</p>
+        </div>
+    </footer>
+
+    <script>
+        function copyInstall() {
+            navigator.clipboard.writeText('curl -fsSL https://warren.run/install.sh | bash');
+            showCopied(event.target);
+        }
+
+        function copyOneLiner() {
+            navigator.clipboard.writeText('curl -fsSL https://warren.run/install.sh | bash');
+            showCopied(event.target);
+        }
+
+        function showCopied(btn) {
+            const original = btn.textContent;
+            btn.textContent = 'copied!';
+            setTimeout(() => { btn.textContent = original; }, 2000);
+        }
+    </script>
+</body>
+</html>

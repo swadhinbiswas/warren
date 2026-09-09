@@ -91,14 +91,27 @@ pub fn build_restore_plan(snapshot: &SessionSnapshot) -> Vec<RestoreEntry> {
                         skip_reason: None,
                     }
                 }
-                AppKind::Files | AppKind::Other => RestoreEntry {
-                    name: app.name.clone(),
-                    kind: app.kind,
-                    command: vec![app.binary.clone()],
-                    cwd,
-                    workspaces: Vec::new(),
-                    skip_reason: None,
-                },
+                AppKind::Files | AppKind::Other => {
+                    // For commands that start with "flatpak run", preserve the
+                    // full command (not just the binary name) so Flatpak apps
+                    // are restored correctly.
+                    let command = if app.binary == "flatpak"
+                        && app.argv.len() > 2
+                        && app.argv.get(1).map(|s| s.as_str()) == Some("run")
+                    {
+                        app.argv.clone()
+                    } else {
+                        vec![app.binary.clone()]
+                    };
+                    RestoreEntry {
+                        name: app.name.clone(),
+                        kind: app.kind,
+                        command,
+                        cwd,
+                        workspaces: Vec::new(),
+                        skip_reason: None,
+                    }
+                }
             }
         })
         .collect()

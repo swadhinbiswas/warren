@@ -60,21 +60,53 @@ pub async fn execute(config: &WarrenConfig, alias: &str, args: &[String]) -> Res
 /// Shared sandbox environment. Mirrors the generated launcher script so
 /// `warren run` and the `~/.local/bin` launcher behave identically.
 ///
-/// GUI instances keep the host `$XDG_RUNTIME_DIR` (Wayland / DBus sockets
-/// live there); CLI instances get the fully isolated runtime dir.
+/// Every instance — CLI, native GUI, snap, *and* Flatpak — gets a private
+/// `$HOME`/`$XDG_*`/`$TMPDIR`. Flatpak honors `$HOME` by relocating its
+/// per-app data to `$HOME/.var/app/<id>/`, so each alias keeps its own
+/// login and files (verified live). GUI instances keep the host
+/// `$XDG_RUNTIME_DIR` (Wayland / DBus sockets live there); CLI instances
+/// get the fully isolated runtime dir.
 fn apply_sandbox_env(
     cmd: &mut std::process::Command,
     layout: &InstanceLayout,
     alias: &str,
     gui: bool,
 ) {
+    let data_dirs = format!(
+        "{}:/usr/local/share:/usr/share:/var/lib/flatpak/exports/share",
+        layout.data_dir().display()
+    );
+    // Ensure the private storage exists even for older instances created
+    // before the launcher learned to `mkdir -p` it.
+    for dir in [
+        layout.home_dir(),
+        layout.config_dir(),
+        layout.cache_dir(),
+        layout.data_dir(),
+        layout.state_dir(),
+        layout.tmp_dir(),
+        layout.runtime_dir(),
+        layout.bin_dir(),
+    ] {
+        std::fs::create_dir_all(&dir).ok();
+    }
     cmd.env("HOME", layout.home_dir())
         .env("XDG_CONFIG_HOME", layout.config_dir())
         .env("XDG_CACHE_HOME", layout.cache_dir())
         .env("XDG_DATA_HOME", layout.data_dir())
+        .env("XDG_DATA_DIRS", &data_dirs)
+        .env("XDG_CONFIG_DIRS", "/etc/xdg")
         .env("XDG_STATE_HOME", layout.state_dir())
         .env("TMPDIR", layout.tmp_dir())
-        .env("WARREN_INSTANCE", alias)
+        .env(
+            "PATH",
+            format!(
+                "{}:{}",
+                layout.bin_dir().display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
+        );
+    cmd.env("WARREN_INSTANCE", alias)
         .env("WARREN_INSTANCE_DIR", &layout.root);
     if gui {
         cmd.env("WARREN_RUNTIME_DIR", layout.runtime_dir());
@@ -83,5 +115,22 @@ fn apply_sandbox_env(
         }
     } else {
         cmd.env("XDG_RUNTIME_DIR", layout.runtime_dir());
+    }
+    // Only host *installation* metadata is inherited. Ephemeral per-run
+    // sandbox variables (sandbox id, instance id, …) are deliberately
+    // dropped so one instance can never leak its sandbox identity into
+    // another; `flatpak run` sets fresh ones per launch.
+    for var in &["FLATPAK_DATA_DIRS", "FLATPAK_BASEDIR"] {
+        if let Ok(val) = std::env::var(var) {
+            cmd.env(var, val);
+        }
+    }
+    for var in &[
+        "FLATPAK_ID",
+        "FLATPAK_SANDBOX_DIR",
+        "FLATPAK_INSTANCE_ID",
+        "FLATPAK_DEST",
+    ] {
+        cmd.env_remove(var);
     }
 }

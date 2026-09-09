@@ -11,6 +11,7 @@ pub async fn execute(
     theme: &Theme,
     path: &Path,
     alias_override: Option<&str>,
+    fresh: bool,
 ) -> Result<()> {
     if !path.exists() {
         bail!("archive not found: {}", path.display());
@@ -28,39 +29,88 @@ pub async fn execute(
     if target_dir.exists() {
         bail!("instance '{}' already exists", alias);
     }
-    // When the archive is renamed to a different alias, the unpack
-    // landing spot (the archive's internal root) must not clobber an
-    // existing instance either.
-    if alias != archive_alias && config.paths.instances_dir.join(&archive_alias).exists() {
-        bail!(
-            "archive root '{}' conflicts with an existing instance; remove it first",
-            archive_alias
-        );
-    }
+    // Extraction goes to a unique temp dir and is renamed into place, so
+    // the archive's internal root name can never clobber an existing
+    // instance — even when `--as` renames it. No extra guard needed.
 
-    // All entries were validated above; now extract.
+    // All entries were validated above; now extract to a temporary directory
+    // first, then atomically rename to the final location. This prevents
+    // partial extractions from polluting the instances directory.
     let file = std::fs::File::open(path)
         .with_context(|| format!("failed to open archive {}", path.display()))?;
     let dec = GzDecoder::new(file);
     let mut archive = tar::Archive::new(dec);
+
+    // Create a temporary extraction directory
+    let temp_dir = config
+        .paths
+        .instances_dir
+        .join(format!(".import-tmp-{}", std::process::id()));
+    if temp_dir.exists() {
+        std::fs::remove_dir_all(&temp_dir)
+            .with_context(|| format!("failed to clean up temp dir {}", temp_dir.display()))?;
+    }
+    std::fs::create_dir_all(&temp_dir)
+        .with_context(|| format!("failed to create temp dir {}", temp_dir.display()))?;
+
     archive
-        .unpack(&config.paths.instances_dir)
+        .unpack(&temp_dir)
         .with_context(|| "failed to extract archive")?;
 
-    if alias != archive_alias {
-        let src = config.paths.instances_dir.join(&archive_alias);
-        let dst = target_dir.clone();
-        std::fs::rename(&src, &dst)
-            .with_context(|| format!("failed to rename {} to {}", src.display(), dst.display()))?;
+    // Move the extracted directory to its final location
+    let src = temp_dir.join(&archive_alias);
+    if !src.exists() {
+        std::fs::remove_dir_all(&temp_dir).ok();
+        bail!(
+            "archive did not contain expected root directory '{}'",
+            archive_alias
+        );
     }
+    std::fs::rename(&src, &target_dir).with_context(|| {
+        format!(
+            "failed to move {} to {}",
+            src.display(),
+            target_dir.display()
+        )
+    })?;
+
+    // Clean up temp directory
+    std::fs::remove_dir_all(&temp_dir).ok();
 
     let layout = InstanceLayout::new(&config.paths.instances_dir, alias);
+    if fresh {
+        // Fresh import: wipe every storage directory so the imported app
+        // boots like a first-time install. Program (`bin/`) and installer
+        // scripts (`installers/`) are kept; logins, configs, caches,
+        // sessions and logs are emptied.
+        for dir in [
+            layout.home_dir(),
+            layout.config_dir(),
+            layout.cache_dir(),
+            layout.data_dir(),
+            layout.state_dir(),
+            layout.tmp_dir(),
+            layout.runtime_dir(),
+            layout.logs_dir(),
+        ] {
+            if dir.exists() {
+                std::fs::remove_dir_all(&dir).with_context(|| {
+                    format!("failed to clear {} on fresh import", dir.display())
+                })?;
+            }
+            std::fs::create_dir_all(&dir)
+                .with_context(|| format!("failed to recreate {} on fresh import", dir.display()))?;
+        }
+        theme.step("✦", "fresh import — logins and data start empty");
+    }
     let mut metadata = InstanceMetadata::load(&layout.metadata_path())?;
     if alias != metadata.instance.alias {
         metadata.instance.alias = alias.to_string();
         metadata.paths.root = layout.root.to_string_lossy().to_string();
         metadata.paths.bin = layout.bin_dir().to_string_lossy().to_string();
     }
+    // Ensure the metadata alias matches the actual directory name
+    metadata.instance.alias = alias.to_string();
     let launcher_content = if metadata.install.launch_command.is_empty() {
         Launcher::generate_file(
             alias,

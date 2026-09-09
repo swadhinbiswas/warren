@@ -12,7 +12,7 @@ pub mod update;
 use crate::cli::{Cli, Command, ShellAction};
 use crate::config::WarrenConfig;
 use crate::ui::theme::Theme;
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 pub async fn dispatch(cli: Cli, config: &WarrenConfig) -> Result<()> {
     let theme = Theme::new();
@@ -33,23 +33,46 @@ pub async fn dispatch(cli: Cli, config: &WarrenConfig) -> Result<()> {
             } else {
                 None
             };
+            let _lock = crate::lock::InstanceLock::acquire(&config.paths.instances_dir, &alias)
+                .with_context(|| format!("could not lock instance '{}'", alias))?;
             dig::execute(config, &theme, &source, &alias, yes, gui_override).await
         }
         Command::Run { alias, args } => run::execute(config, &alias, &args).await,
         Command::Ls => ls::execute(config, &theme).await,
         Command::Inspect { alias } => inspect::execute(config, &theme, &alias).await,
-        Command::Rm { alias, yes } => rm::execute(config, &theme, &alias, yes).await,
-        Command::Update { alias, yes } => update::execute(config, &theme, &alias, yes).await,
-        Command::Clone { source, dest } => {
+        Command::Rm { alias, yes } => {
+            let _lock = crate::lock::InstanceLock::acquire(&config.paths.instances_dir, &alias)
+                .with_context(|| format!("could not lock instance '{}'", alias))?;
+            rm::execute(config, &theme, &alias, yes).await
+        }
+        Command::Update { alias, yes } => {
+            let _lock = crate::lock::InstanceLock::acquire(&config.paths.instances_dir, &alias)
+                .with_context(|| format!("could not lock instance '{}'", alias))?;
+            update::execute(config, &theme, &alias, yes).await
+        }
+        Command::Clone {
+            source,
+            dest,
+            copy_data,
+        } => {
             config.ensure_dirs()?;
-            clone::execute(config, &theme, &source, &dest).await
+            let _lock_src =
+                crate::lock::InstanceLock::acquire(&config.paths.instances_dir, &source)
+                    .with_context(|| format!("could not lock source instance '{}'", source))?;
+            let _lock_dst = crate::lock::InstanceLock::acquire(&config.paths.instances_dir, &dest)
+                .with_context(|| format!("could not lock destination instance '{}'", dest))?;
+            clone::execute(config, &theme, &source, &dest, copy_data).await
         }
         Command::Export { alias, out } => {
+            let _lock = crate::lock::InstanceLock::acquire(&config.paths.instances_dir, &alias)
+                .with_context(|| format!("could not lock instance '{}'", alias))?;
             export::execute(config, &theme, &alias, out.as_deref()).await
         }
-        Command::Import { path, alias } => {
+        Command::Import { path, alias, fresh } => {
             config.ensure_dirs()?;
-            import::execute(config, &theme, &path, alias.as_deref()).await
+            let _lock = crate::lock::GlobalLock::acquire(&config.paths.instances_dir)
+                .with_context(|| "could not acquire global warren lock")?;
+            import::execute(config, &theme, &path, alias.as_deref(), fresh).await
         }
         Command::Env => {
             print_env(config, &theme);
@@ -84,7 +107,10 @@ pub async fn dispatch(cli: Cli, config: &WarrenConfig) -> Result<()> {
 fn print_env(config: &WarrenConfig, theme: &Theme) {
     theme.header("environment");
     theme.kv("Version", env!("CARGO_PKG_VERSION"));
-    theme.kv("Warren dir", &WarrenConfig::warren_dir().to_string_lossy());
+    theme.kv(
+        "Warren dir",
+        &WarrenConfig::warren_dir_raw().to_string_lossy(),
+    );
     theme.kv("Instances", &config.paths.instances_dir.to_string_lossy());
     theme.kv("Bin dir", &config.paths.bin_dir.to_string_lossy());
     theme.kv("Shell", &crate::shell::detect_shell().to_string());
